@@ -27,13 +27,35 @@
     }
   }
 
+  function targetLocatorFor(step) {
+    const meta = step.meta || {};
+    const type = meta.targetSelectorType || 'css';
+    const selector = meta.targetSelector || '';
+    switch (type) {
+      case 'testid':
+        return `page.get_by_test_id(${pyStr(selector)})`;
+      case 'id':
+        return `page.locator(${pyStr('#' + selector)})`;
+      case 'role':
+        return `page.get_by_role(${pyStr(meta.targetRole || 'button')}, name=${pyStr(selector)})`;
+      case 'xpath':
+        return `page.locator(${pyStr('xpath=' + (meta.targetCssEquivalent || selector))})`;
+      case 'css':
+      default:
+        return `page.locator(${pyStr(meta.targetCssEquivalent || selector)})`;
+    }
+  }
+
   function lineFor(step) {
     switch (step.action) {
       case 'navigate':
         return `page.goto(${pyStr(step.url)})`;
       case 'click':
-      case 'upload-click':
         return `${locatorFor(step)}.click()`;
+      case 'upload-click':
+        // Clicking a file input can open a native file picker during replay.
+        // The recorded `upload` step later performs set_input_files.
+        return '# recorded file-picker click; file selection is captured by the upload step';
       case 'fill':
         return `${locatorFor(step)}.fill(${pyStr(step.value)})`;
       case 'select':
@@ -48,8 +70,14 @@
         return `${locatorFor(step)}.hover()`;
       case 'upload':
         return `${locatorFor(step)}.set_input_files(${pyStr(step.value)})  # adjust path(s)`;
+      case 'wait':
+        return `page.wait_for_timeout(${Number((step.waitFor || {}).timeout || 1000)})`;
+      case 'assert-text':
+        return `expect(${locatorFor(step)}).to_contain_text(${pyStr(step.value)})`;
+      case 'assert-visible':
+        return `expect(${locatorFor(step)}).to_be_visible()`;
       case 'dragdrop':
-        return `${locatorFor(step)}.drag_to(page.locator(${pyStr(step.meta?.targetSelector || '')}))`;
+        return `${locatorFor(step)}.drag_to(${targetLocatorFor(step)})`;
       default:
         return `# TODO: unsupported action '${step.action}'`;
     }
@@ -64,7 +92,7 @@
     lines.push(`Generated: ${new Date().toISOString()}`);
     lines.push(`Steps: ${steps.length}`);
     lines.push('"""');
-    lines.push('from playwright.sync_api import sync_playwright');
+    lines.push('from playwright.sync_api import sync_playwright, expect');
     lines.push('');
     lines.push('');
     lines.push('def run():');
@@ -89,9 +117,10 @@
     return lines.join('\n');
   }
 
-  window.__PW_REC__ = window.__PW_REC__ || {};
-  window.__PW_REC__.codegen = { generatePlaywrightScript };
-  if (typeof self !== 'undefined') {
-    self.__PW_CODEGEN__ = { generatePlaywrightScript };
-  }
+  // Use globalThis so this module works in a service worker (no window) and
+  // in the content-script/page context (window) without throwing.
+  const root = typeof globalThis !== 'undefined' ? globalThis : self;
+  root.__PW_REC__ = root.__PW_REC__ || {};
+  root.__PW_REC__.codegen = { generatePlaywrightScript };
+  root.__PW_CODEGEN__ = { generatePlaywrightScript };
 })();

@@ -32,6 +32,9 @@
   "host_permissions": [
     "<all_urls>"
   ],
-  "options_page": "popup.html",
-  "minimum_chrome_version": "116"
+  "minimum_chrome_version": "102",
+  "options_ui": {
+    "page": "popup.html",
+    "open_in_tab": true
+  }
 }

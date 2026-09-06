@@ -183,8 +183,12 @@ class RunnerThread(QThread):
 
         locator = self._resolve(page, step)
 
-        if action in ("click", "upload-click"):
+        if action == "click":
             locator.click(timeout=timeout)
+        elif action == "upload-click":
+            # No-op during replay: clicking a file input can open the native
+            # file picker. The following `upload` step calls set_input_files.
+            pass
         elif action == "fill":
             locator.fill(str(step.value or ""), timeout=timeout)
         elif action == "select":
@@ -201,9 +205,9 @@ class RunnerThread(QThread):
             files = [f.strip() for f in str(step.value or "").split(",") if f.strip()]
             locator.set_input_files(files, timeout=timeout)
         elif action == "dragdrop":
-            target_selector = (step.meta or {}).get("targetSelector")
-            if target_selector:
-                locator.drag_to(page.locator(target_selector), timeout=timeout)
+            target = self._resolve_target(page, step.meta or {})
+            if target is not None:
+                locator.drag_to(target, timeout=timeout)
         elif action == "wait":
             page.wait_for_timeout(timeout)
         elif action == "assert-text":
@@ -218,6 +222,27 @@ class RunnerThread(QThread):
             raise RuntimeError(f"Unsupported action '{action}'")
 
         return page
+
+    def _resolve_target(self, page, meta: dict):
+        """Resolve the drag-and-drop target locator using its recorded type."""
+        st = meta.get("targetSelectorType") or "css"
+        selector = meta.get("targetSelector") or ""
+        if not selector:
+            return None
+        if st == "testid":
+            return page.get_by_test_id(selector)
+        if st == "id":
+            return page.locator(f"#{selector}")
+        if st == "role":
+            return page.get_by_role(meta.get("targetRole") or "button", name=selector)
+        if st == "css":
+            return page.locator(meta.get("targetCssEquivalent") or selector)
+        if st == "xpath":
+            target = meta.get("targetCssEquivalent") or selector
+            if not target.startswith("xpath="):
+                target = f"xpath={target}"
+            return page.locator(target)
+        return page.locator(selector or "body")
 
     def _resolve(self, page, step: Step):
         """Resolve a Playwright Locator for the step using the same priority

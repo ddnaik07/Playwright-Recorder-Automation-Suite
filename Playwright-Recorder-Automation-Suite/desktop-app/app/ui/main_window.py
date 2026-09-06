@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
         self.runner: RunnerThread | None = None
         self.last_run_result = None
         self._live_recording_script: Script | None = None
+        self._live_recording_session_id: str | None = None
 
         self._build_ui()
         self._build_menu_and_toolbar()
@@ -165,6 +166,8 @@ class MainWindow(QMainWindow):
         if ok and name:
             self.project = new_project(name)
             self.current_script_index = -1
+            self._live_recording_script = None
+            self._live_recording_session_id = None
             self._refresh_script_list()
             self.steps_table.load_steps([])
 
@@ -175,6 +178,8 @@ class MainWindow(QMainWindow):
         try:
             self.project = load_project(path)
             self.current_script_index = -1
+            self._live_recording_script = None
+            self._live_recording_session_id = None
             self._refresh_script_list()
         except Exception as e:
             QMessageBox.critical(self, "Open failed", str(e))
@@ -258,6 +263,9 @@ class MainWindow(QMainWindow):
         script = self._current_script()
         if not script or not script.steps:
             QMessageBox.information(self, "Run", "This script has no steps.")
+            return
+        if self.runner and self.runner.isRunning():
+            QMessageBox.information(self, "Run", "A run is already in progress. Stop it or wait for it to finish first.")
             return
         os.makedirs(ARTIFACT_DIR, exist_ok=True)
         self.log_panel.clear()
@@ -370,10 +378,18 @@ class MainWindow(QMainWindow):
         port_str, ok2 = QInputDialog.getText(self, "Bridge port", "Port:", text="8765")
         if not ok2:
             return
+        try:
+            port = int(port_str)
+        except ValueError:
+            QMessageBox.critical(self, "Bridge server", "Port must be a number between 1 and 65535.")
+            return
+        if not (1 <= port <= 65535):
+            QMessageBox.critical(self, "Bridge server", "Port must be between 1 and 65535.")
+            return
         token, ok3 = QInputDialog.getText(self, "Shared secret token", "Token (must match the extension):", text="change-me-shared-secret")
         if not ok3:
             return
-        self.bridge = BridgeServer(host=host, port=int(port_str), token=token)
+        self.bridge = BridgeServer(host=host, port=port, token=token)
         self.bridge.step_received.connect(self._on_bridge_step)
         self.bridge.session_event.connect(self._on_bridge_session_event)
         self.bridge.client_connected.connect(lambda _id: self._set_bridge_indicator(True))
@@ -402,7 +418,14 @@ class MainWindow(QMainWindow):
 
     def _on_bridge_session_event(self, mtype: str, msg: dict):
         if mtype == "session.start":
+            session_id = msg.get("sessionId")
+            if self._live_recording_script and session_id and session_id == self._live_recording_session_id:
+                # The extension re-connected with the same session (e.g. after a
+                # service-worker restart); keep streaming into the same script.
+                self.log_panel.append_log("bridge: reconnected to existing live session", "info")
+                return
             self._live_recording_script = Script(name=f"Live recording {datetime.datetime.now():%H:%M:%S}", steps=[])
+            self._live_recording_session_id = session_id
             self.project.scripts.append(self._live_recording_script)
             self._refresh_script_list()
             self.script_list.setCurrentRow(len(self.project.scripts) - 1)

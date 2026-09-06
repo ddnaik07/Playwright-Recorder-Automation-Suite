@@ -84,6 +84,10 @@ class Step:
             setattr(step, k, v)
         if not step.waitFor:
             step.waitFor = asdict(WaitFor())
+        if step.selectorType is None:
+            step.selectorType = SelectorType.NONE.value
+        if not step.id:
+            step.id = str(uuid.uuid4())
         return step
 
     def to_dict(self) -> dict:

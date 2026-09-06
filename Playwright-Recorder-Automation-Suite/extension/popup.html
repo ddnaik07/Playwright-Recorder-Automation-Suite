@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Playwright Recorder</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <img src="icons/icon48.png" alt="" width="22" height="22" />
+          <span>Playwright Recorder</span>
+        </div>
+        <div class="bridge-indicator" id="bridgeIndicator" title="Bridge status">
+          <span class="dot" id="bridgeDot"></span>
+          <span id="bridgeLabel">Bridge: disconnected</span>
+        </div>
+      </header>
+
+      <nav class="tabs">
+        <button class="tab-btn active" data-tab="record">Record</button>
+        <button class="tab-btn" data-tab="settings">Settings</button>
+      </nav>
+
+      <section id="tab-record" class="panel active">
+        <div id="tabPicker" class="card">
+          <div class="card-title">Choose a tab to record</div>
+          <div id="tabList" class="tab-list"></div>
+        </div>
+
+        <div class="controls">
+          <button id="btnRecord" class="btn btn-primary">● Record</button>
+          <button id="btnPause" class="btn" disabled>‖ Pause</button>
+          <button id="btnResume" class="btn" disabled hidden>▶ Resume</button>
+          <button id="btnStop" class="btn btn-danger" disabled>■ Stop</button>
+          <span id="stateBadge" class="badge idle">idle</span>
+        </div>
+
+        <div class="card steps-card">
+          <div class="card-title-row">
+            <span class="card-title">Recorded steps</span>
+            <span id="stepCount" class="muted">0</span>
+          </div>
+          <div id="stepsList" class="steps-list">
+            <div class="empty-hint">No steps yet. Pick a tab and hit Record.</div>
+          </div>
+        </div>
+
+        <div id="exportPanel" class="card" hidden>
+          <div class="card-title">Export session</div>
+          <div class="export-row">
+            <button id="btnExportJson" class="btn btn-secondary">⬇ Download JSON</button>
+            <button id="btnExportPy" class="btn btn-secondary">⬇ Download Playwright .py</button>
+          </div>
+          <button id="btnNewSession" class="btn btn-link">Start a new recording</button>
+        </div>
+      </section>
+
+      <section id="tab-settings" class="panel">
+        <div class="card">
+          <div class="card-title">Selector strategy priority</div>
+          <ol class="priority-list">
+            <li>data-testid / data-* attributes</li>
+            <li>id attribute</li>
+            <li>aria-role / label + visible text</li>
+            <li>unique CSS path</li>
+            <li>XPath fallback</li>
+          </ol>
+          <label class="switch-row">
+            <input type="checkbox" id="cfgScreenshots" />
+            <span>Capture a screenshot thumbnail per step</span>
+          </label>
+          <label class="switch-row">
+            <input type="checkbox" id="cfgHovers" />
+            <span>Capture hover events (may be noisy)</span>
+          </label>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Domain ignore-list</div>
+          <p class="muted small">One domain per line. Interactions on these domains won't be recorded.</p>
+          <textarea id="cfgIgnoreDomains" rows="3" placeholder="accounts.google.com&#10;doubleclick.net"></textarea>
+        </div>
+
+        <div class="card">
+          <div class="card-title">Bridge server (desktop app)</div>
+          <div class="grid-2">
+            <label>Host<input type="text" id="cfgHost" placeholder="127.0.0.1" /></label>
+            <label>Port<input type="text" id="cfgPort" placeholder="8765" /></label>
+          </div>
+          <label>Shared secret token<input type="text" id="cfgToken" placeholder="shared secret" /></label>
+          <label class="switch-row">
+            <input type="checkbox" id="cfgAutoConnect" />
+            <span>Auto-connect to bridge when recording starts</span>
+          </label>
+          <div class="export-row">
+            <button id="btnConnectBridge" class="btn btn-secondary">Connect</button>
+            <button id="btnDisconnectBridge" class="btn">Disconnect</button>
+          </div>
+        </div>
+
+        <button id="btnSaveSettings" class="btn btn-primary full">Save settings</button>
+        <div id="settingsSaved" class="muted small" hidden>Saved ✓</div>
+      </section>
+    </div>
+    <script src="popup.js"></script>
+  </body>
+</html>

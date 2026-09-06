@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Automation Run Report - demo-run-0001</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; background:#0f1115; color:#e5e7eb; margin:0; padding:24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .meta { color:#9ca3af; font-size:12px; margin-bottom: 20px; }
+  .summary { display:flex; gap:12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .card { background:#171a21; border:1px solid #262b36; border-radius:10px; padding:14px 18px; min-width:110px; }
+  .card .num { font-size:24px; font-weight:700; }
+  .card .label { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#9ca3af; }
+  .passed .num { color:#34d399; } .failed .num { color:#f87171; } .skipped .num { color:#fbbf24; }
+  table { width:100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align:left; padding:8px 10px; border-bottom:1px solid #262b36; vertical-align: top; }
+  th { color:#9ca3af; font-weight:600; text-transform:uppercase; font-size: 11px; }
+  tr.failed { background: rgba(248,113,113,.06); }
+  tr.skipped { background: rgba(251,191,36,.06); }
+  .status-pill { padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight:700; text-transform:uppercase; }
+  .status-passed { background:#064e3b; color:#34d399; }
+  .status-failed { background:#7f1d1d; color:#fca5a5; }
+  .status-skipped { background:#78350f; color:#fcd34d; }
+  .status-pending, .status-running { background:#1e293b; color:#93c5fd; }
+  .selector { font-family: ui-monospace, monospace; font-size:11px; color:#93c5fd; word-break: break-all; }
+  .err { color:#fca5a5; font-size: 11px; }
+  a.shot { color:#818cf8; font-size:11px; }
+</style>
+</head>
+<body>
+  <h1>Automation Run Report</h1>
+  <div class="meta">Run ID: demo-run-0001 &middot; Started: 1732200000000 &middot; Duration: 7.1s</div>
+  <div class="summary">
+    <div class="card"><div class="num">9</div><div class="label">Total steps</div></div>
+    <div class="card passed"><div class="num">7</div><div class="label">Passed</div></div>
+    <div class="card failed"><div class="num">1</div><div class="label">Failed</div></div>
+    <div class="card skipped"><div class="num">1</div><div class="label">Skipped</div></div>
+  </div>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Action</th><th>Selector</th><th>Value</th><th>Status</th><th>Duration</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      <tr class="">
+  <td>1</td>
+  <td>navigate</td>
+  <td class="selector"></td>
+  <td></td>
+  <td><span class="status-pill status-passed">passed</span></td>
+  <td>180 ms</td>
+  <td></td>
+</tr>
+<tr class="">
+  <td>2</td>
+  <td>fill</td>
+  <td class="selector">email</td>
+  <td>jane.doe@example.com</td>
+  <td><span class="status-pill status-passed">passed</span></td>
+  <td>215 ms</td>
+  <td></td>
+</tr>
+<tr class="">
+  <td>3</td>
+  <td>fill</td>
+  <td class="selector">password</td>
+  <td>Sup3rSecret!</td>
+  <td><span class="status-pill status-passed">passed</span></td>
+  <td>250 ms</td>
+  <td></td>
+</tr>
+<tr class="">
+  <td>4</td>
+  <td>press</td>
+  <td class="selector">password</td>
+  <td>Enter</td>
+  <td><span class="status-pill status-passed">passed</span></td>
+  <td>285 ms</td>
+  <td></td>
+</tr>
+<tr class="">
+  <td>5</td>
+  <td>navigate</td>
+  <td class="selector"></td>
+  <td></td>
+  <td><span class="status-pill status-passed">passed</span></td>
+  <td>320 ms</td>
+  <td></td>
+</tr>
+<tr class="">
+  <td>6</td>
+  <td>click</td>
+  <td class="selector">Add to cart</td>
+  <td></td>
+  <td><span class="status-pill status-passed">passed</span></td>
+  <td>355 ms</td>
+  <td></td>
+</tr>
+<tr class="failed">
+  <td>7</td>
+  <td>select</td>
+  <td class="selector">#shipping-method</td>
+  <td>express</td>
+  <td><span class="status-pill status-failed">failed</span></td>
+  <td>390 ms</td>
+  <td><span class="err">Timeout 5000ms exceeded waiting for locator to become visible <a class="shot" href="run_artifacts/step_7_1732200012000.png">screenshot: step_7_1732200012000.png</a></span></td>
+</tr>
+<tr class="skipped">
+  <td>8</td>
+  <td>check</td>
+  <td class="selector">terms-checkbox</td>
+  <td>True</td>
+  <td><span class="status-pill status-skipped">skipped</span></td>
+  <td>425 ms</td>
+  <td></td>
+</tr>
+<tr class="">
+  <td>9</td>
+  <td>click</td>
+  <td class="selector">Checkout</td>
+  <td></td>
+  <td><span class="status-pill status-passed">passed</span></td>
+  <td>460 ms</td>
+  <td></td>
+</tr>
+    </tbody>
+  </table>
+</body>
+</html>

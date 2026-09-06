@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "Playwright Recorder & Automation Bridge",
+  "version": "1.0.0",
+  "description": "Record browser interactions on any open tab and export them as JSON steps or a Playwright Python script. Optionally streams steps live to the companion desktop app over a local WebSocket bridge.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Playwright Recorder",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "scripting",
+    "storage",
+    "downloads",
+    "webNavigation",
+    "notifications"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "options_page": "popup.html",
+  "minimum_chrome_version": "116"
+}

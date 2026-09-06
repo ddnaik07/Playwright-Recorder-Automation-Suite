@@ -1,0 +1,126 @@
+{
+  "sessionId": "8f14e45f-ceea-467e-bd7c-000000000001",
+  "tabInfo": {
+    "title": "Demo Shop — Checkout",
+    "url": "https://demo-shop.example.com/login"
+  },
+  "steps": [
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0001",
+      "action": "navigate",
+      "selector": null,
+      "selectorType": null,
+      "value": null,
+      "url": "https://demo-shop.example.com/login",
+      "frameId": 0,
+      "timestamp": 1732200000000,
+      "screenshot": null,
+      "waitFor": { "type": "networkidle", "timeout": 8000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0002",
+      "action": "fill",
+      "selector": "email",
+      "selectorType": "testid",
+      "cssEquivalent": "[data-testid=\"email\"]",
+      "value": "jane.doe@example.com",
+      "url": "https://demo-shop.example.com/login",
+      "frameId": 0,
+      "timestamp": 1732200002500,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0003",
+      "action": "fill",
+      "selector": "password",
+      "selectorType": "testid",
+      "cssEquivalent": "[data-testid=\"password\"]",
+      "value": "Sup3rSecret!",
+      "url": "https://demo-shop.example.com/login",
+      "frameId": 0,
+      "timestamp": 1732200004100,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0004",
+      "action": "press",
+      "selector": "password",
+      "selectorType": "testid",
+      "cssEquivalent": "[data-testid=\"password\"]",
+      "value": "Enter",
+      "url": "https://demo-shop.example.com/login",
+      "frameId": 0,
+      "timestamp": 1732200004600,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0005",
+      "action": "navigate",
+      "selector": null,
+      "selectorType": null,
+      "value": null,
+      "url": "https://demo-shop.example.com/dashboard",
+      "frameId": 0,
+      "timestamp": 1732200006000,
+      "screenshot": null,
+      "waitFor": { "type": "networkidle", "timeout": 8000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0006",
+      "action": "click",
+      "selector": "Add to cart",
+      "selectorType": "role",
+      "role": "button",
+      "cssEquivalent": "role=button[name=\"Add to cart\"]",
+      "value": null,
+      "url": "https://demo-shop.example.com/dashboard",
+      "frameId": 0,
+      "timestamp": 1732200008200,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0007",
+      "action": "select",
+      "selector": "#shipping-method",
+      "selectorType": "css",
+      "cssEquivalent": "#shipping-method",
+      "value": "express",
+      "url": "https://demo-shop.example.com/dashboard",
+      "frameId": 0,
+      "timestamp": 1732200009900,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0008",
+      "action": "check",
+      "selector": "terms-checkbox",
+      "selectorType": "testid",
+      "cssEquivalent": "[data-testid=\"terms-checkbox\"]",
+      "value": true,
+      "url": "https://demo-shop.example.com/dashboard",
+      "frameId": 0,
+      "timestamp": 1732200011000,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    },
+    {
+      "id": "b3b9c9b0-6f1a-4a9e-9c2e-6b6f1a2b0009",
+      "action": "click",
+      "selector": "Checkout",
+      "selectorType": "role",
+      "role": "button",
+      "cssEquivalent": "role=button[name=\"Checkout\"]",
+      "value": null,
+      "url": "https://demo-shop.example.com/dashboard",
+      "frameId": 0,
+      "timestamp": 1732200013500,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    }
+  ]
+}

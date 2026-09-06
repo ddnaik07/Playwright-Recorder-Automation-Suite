@@ -31,7 +31,7 @@ async function loadTabs() {
     const item = document.createElement('div');
     item.className = 'tab-item' + (t.id === selectedTabId ? ' selected' : '');
     item.innerHTML = `
-      <img src="${t.favIconUrl || 'icons/icon16.png'}" onerror="this.src='icons/icon16.png'" />
+      <img src="${escapeHtml(t.favIconUrl || 'icons/icon16.png')}" onerror="this.src='icons/icon16.png'" />
       <div class="tab-meta">
         <div class="tab-title">${escapeHtml(t.title || '(untitled)')}</div>
         <div class="tab-url">${escapeHtml(t.url || '')}</div>
@@ -76,7 +76,9 @@ $('#btnNewSession').addEventListener('click', async () => {
 });
 
 function download(filename, dataUrl) {
-  chrome.downloads.download({ url: dataUrl, filename, saveAs: false });
+  chrome.downloads.download({ url: dataUrl, filename, saveAs: false }).catch((err) => {
+    console.error('[recorder] export failed', err);
+  });
 }
 $('#btnExportJson').addEventListener('click', async () => {
   const { filename, dataUrl } = await send({ type: 'export-session', format: 'json' });
@@ -176,6 +178,10 @@ $('#btnSaveSettings').addEventListener('click', async () => {
     bridgeToken: $('#cfgToken').value.trim(),
     autoConnectBridge: $('#cfgAutoConnect').checked,
   };
+  if (!Number.isInteger(settings.bridgePort) || settings.bridgePort < 1 || settings.bridgePort > 65535) {
+    alert('Bridge port must be a whole number between 1 and 65535.');
+    return;
+  }
   await send({ type: 'update-settings', settings });
   const saved = $('#settingsSaved');
   saved.hidden = false;

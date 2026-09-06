@@ -34,6 +34,12 @@ class BridgeServer(QThread):
 
     # -- QThread entry point -------------------------------------------------
     def run(self):
+        local_hosts = {"127.0.0.1", "localhost", "::1", "::ffff:127.0.0.1"}
+        if self.host.lower() not in local_hosts:
+            self.server_error.emit(
+                "Bridge server must bind to a loopback host (127.0.0.1, localhost or ::1), not a public interface."
+            )
+            return
         try:
             import websockets  # imported lazily so the GUI can start without it installed
         except ImportError:

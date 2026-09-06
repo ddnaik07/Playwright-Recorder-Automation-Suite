@@ -6,6 +6,7 @@ helper to collect the failed/skipped steps of a run for a targeted re-run.
 """
 from __future__ import annotations
 
+import html
 import os
 from typing import List
 
@@ -84,23 +85,24 @@ def build_html_report(result: RunResult) -> str:
     counts = result.counts()
     rows_html = []
     for i, sr in enumerate(result.steps, start=1):
-        notes = sr.error or ""
+        notes = html.escape(sr.error or "")
         if sr.screenshotPath:
-            fname = os.path.basename(sr.screenshotPath)
-            notes += f' <a class="shot" href="{sr.screenshotPath}">screenshot: {fname}</a>'
+            fname = html.escape(os.path.basename(sr.screenshotPath))
+            href = html.escape(str(sr.screenshotPath))
+            notes += f' <a class="shot" href="{href}">screenshot: {fname}</a>'
         row = (
             _ROW_TEMPLATE.replace("{{ row_class }}", sr.status if sr.status in ("failed", "skipped") else "")
             .replace("{{ idx }}", str(i))
-            .replace("{{ action }}", sr.step.action)
-            .replace("{{ selector }}", str(sr.step.selector or ""))
-            .replace("{{ value }}", str(sr.step.value if sr.step.value is not None else ""))
+            .replace("{{ action }}", html.escape(sr.step.action))
+            .replace("{{ selector }}", html.escape(str(sr.step.selector or "")))
+            .replace("{{ value }}", html.escape(str(sr.step.value if sr.step.value is not None else "")))
             .replace("{{ status }}", sr.status)
             .replace("{{ duration }}", str(sr.durationMs))
             .replace("{{ notes }}", f'<span class="err">{notes}</span>' if notes else "")
         )
         rows_html.append(row)
 
-    html = (
+    rendered_html = (
         _HTML_TEMPLATE.replace("{{ run_id }}", result.runId)
         .replace("{{ started }}", str(result.startedAt))
         .replace("{{ duration }}", _fmt_ms(result.durationMs))
@@ -110,7 +112,7 @@ def build_html_report(result: RunResult) -> str:
         .replace("{{ skipped }}", str(counts.get(StepStatus.SKIPPED.value, 0)))
         .replace("{{ rows }}", "\n".join(rows_html))
     )
-    return html
+    return rendered_html
 
 
 def export_html(result: RunResult, path: str) -> str:

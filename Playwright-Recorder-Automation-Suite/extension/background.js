@@ -28,6 +28,17 @@ let session = {
 };
 
 let bridgeSocket = null;
+function uuid() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  // Fallback for extension workers/browsers where crypto.randomUUID is missing.
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.floor(Math.random() * 16);
+    return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16);
+  });
+}
+
 let bridgeStatus = 'disconnected'; // disconnected | connecting | connected | error
 let settingsCache = null;
 let lastScreenshotAt = 0;
@@ -59,10 +70,18 @@ async function restoreSession() {
   const stored = await chrome.storage.session.get('session');
   if (stored.session) session = stored.session;
 }
-restoreSession();
+const readyPromise = restoreSession().catch((e) => {
+  console.warn('[recorder] failed to restore session', e);
+});
 
 function broadcastState() {
-  chrome.runtime.sendMessage({ type: 'state-update', session, bridgeStatus }).catch(() => {});
+  // There is no guarantee a popup is listening; never let a state broadcast
+  // take the service worker down.
+  try {
+    chrome.runtime.sendMessage({ type: 'state-update', session, bridgeStatus }).catch(() => {});
+  } catch (e) {
+    /* ignore: popup closed */
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +127,7 @@ async function startRecording(tabId) {
   const tab = await chrome.tabs.get(tabId);
   session = {
     status: 'recording',
-    sessionId: crypto.randomUUID(),
+    sessionId: uuid(),
     tabId,
     tabInfo: { title: tab.title, url: tab.url, favIconUrl: tab.favIconUrl },
     startedAt: Date.now(),
@@ -117,7 +136,7 @@ async function startRecording(tabId) {
   await persistSession();
   await injectRecorder(tabId);
   addStep({
-    id: crypto.randomUUID(),
+    id: uuid(),
     action: 'navigate',
     selector: null,
     selectorType: null,
@@ -127,14 +146,18 @@ async function startRecording(tabId) {
     timestamp: Date.now(),
     screenshot: null,
     waitFor: { type: 'networkidle', timeout: 8000 },
-  }, { skipBroadcastOnly: false });
+  });
 
+  const settings = await getSettings();
   sendBridge({
     type: 'session.start',
     sessionId: session.sessionId,
-    token: (await getSettings()).bridgeToken,
+    token: settings.bridgeToken,
     meta: { url: tab.url, title: tab.title, userAgent: navigator.userAgent },
   });
+  if (settings.autoConnectBridge && bridgeStatus !== 'connected') {
+    await connectBridge();
+  }
   broadcastState();
 }
 
@@ -182,7 +205,7 @@ async function resetSession() {
 
 function addStep(step) {
   session.steps.push(step);
-  persistSession();
+  persistSession().catch(() => {});
   broadcastState();
   sendBridge({ type: 'step.recorded', sessionId: session.sessionId, step });
 }
@@ -202,15 +225,25 @@ async function maybeCaptureScreenshot() {
   }
 }
 
+async function maybeAutoConnectBridge() {
+  const settings = await getSettings();
+  if (settings.autoConnectBridge && bridgeStatus !== 'connected' && bridgeStatus !== 'connecting') {
+    await connectBridge();
+  }
+}
+
 async function handleRecordedStep(rawStep, tabId) {
   if (session.status !== 'recording') return;
   if (tabId !== session.tabId) return;
   const settings = await getSettings();
   if (isIgnoredUrl(rawStep.url, settings.ignoreDomains)) return;
+  if (settings.autoConnectBridge) {
+    await maybeAutoConnectBridge();
+  }
 
   const screenshot = await maybeCaptureScreenshot();
   const step = {
-    id: rawStep.id || crypto.randomUUID(),
+    id: rawStep.id || uuid(),
     action: rawStep.action,
     selector: rawStep.selector,
     selectorType: rawStep.selectorType,
@@ -229,7 +262,7 @@ async function handleRecordedStep(rawStep, tabId) {
 
 function deleteStep(stepId) {
   session.steps = session.steps.filter((s) => s.id !== stepId);
-  persistSession();
+  persistSession().catch(() => {});
   broadcastState();
 }
 
@@ -237,13 +270,14 @@ function deleteStep(stepId) {
 // Navigation tolerance: re-inject recorder + log a navigate step
 // ---------------------------------------------------------------------------
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  await readyPromise;
   if (session.status !== 'recording' || tabId !== session.tabId) return;
   if (changeInfo.status === 'complete') {
     await injectRecorder(tabId);
     const last = session.steps[session.steps.length - 1];
     if (!last || last.url !== tab.url) {
       addStep({
-        id: crypto.randomUUID(),
+        id: uuid(),
         action: 'navigate',
         selector: null,
         selectorType: null,
@@ -258,9 +292,10 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  await readyPromise;
   if (session.tabId === tabId && (session.status === 'recording' || session.status === 'paused')) {
-    stopRecording();
+    await stopRecording();
   }
 });
 
@@ -279,21 +314,35 @@ function sendBridge(message) {
 
 async function connectBridge() {
   const settings = await getSettings();
-  if (bridgeSocket) {
+  const host = String(settings.bridgeHost || '').trim().toLowerCase();
+  const port = Number(settings.bridgePort);
+  const localHosts = ['127.0.0.1', 'localhost', '::1', '::ffff:127.0.0.1'];
+  if (!host || !localHosts.includes(host) || !Number.isInteger(port) || port < 1 || port > 65535) {
+    bridgeStatus = 'error';
+    broadcastState();
+    return;
+  }
+  const oldSocket = bridgeSocket;
+  if (oldSocket) {
     try {
-      bridgeSocket.close();
+      oldSocket.close();
     } catch (e) {}
   }
   bridgeStatus = 'connecting';
   broadcastState();
+
+  let socket;
   try {
-    bridgeSocket = new WebSocket(`ws://${settings.bridgeHost}:${settings.bridgePort}`);
+    socket = new WebSocket(`ws://${host}:${port}`);
   } catch (e) {
     bridgeStatus = 'error';
     broadcastState();
     return;
   }
-  bridgeSocket.onopen = () => {
+  bridgeSocket = socket;
+
+  socket.onopen = () => {
+    if (bridgeSocket !== socket) return; // a newer connection replaced this one
     bridgeStatus = 'connected';
     broadcastState();
     sendBridge({
@@ -303,20 +352,24 @@ async function connectBridge() {
       meta: { note: 'handshake', extensionVersion: chrome.runtime.getManifest().version },
     });
   };
-  bridgeSocket.onclose = () => {
+  socket.onclose = () => {
+    if (bridgeSocket !== socket) return;
+    bridgeSocket = null;
     bridgeStatus = 'disconnected';
     broadcastState();
   };
-  bridgeSocket.onerror = () => {
+  socket.onerror = () => {
+    if (bridgeSocket !== socket) return;
     bridgeStatus = 'error';
     broadcastState();
   };
-  bridgeSocket.onmessage = (evt) => {
+  socket.onmessage = (evt) => {
+    if (bridgeSocket !== socket) return;
     try {
       const msg = JSON.parse(evt.data);
       if (msg.type === 'auth.error') {
         bridgeStatus = 'error';
-        bridgeSocket.close();
+        socket.close();
         broadcastState();
       }
     } catch (e) {}
@@ -338,7 +391,12 @@ function disconnectBridge() {
 // Export helpers
 // ---------------------------------------------------------------------------
 function toBase64Utf8(str) {
-  return btoa(unescape(encodeURIComponent(str)));
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 1) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 async function exportSession(format) {
@@ -351,7 +409,7 @@ async function exportSession(format) {
     return { filename: `recording-${session.sessionId}.json`, dataUrl: `data:application/json;base64,${toBase64Utf8(payload)}` };
   }
   if (format === 'python') {
-    const script = self.__PW_CODEGEN__.generatePlaywrightScript(session.steps, { browser: 'chromium' });
+    const script = globalThis.__PW_CODEGEN__.generatePlaywrightScript(session.steps, { browser: 'chromium' });
     return { filename: `recording-${session.sessionId}.py`, dataUrl: `data:text/x-python;base64,${toBase64Utf8(script)}` };
   }
   throw new Error('Unknown export format');
@@ -362,6 +420,7 @@ async function exportSession(format) {
 // ---------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
+    await readyPromise;
     switch (message.type) {
       case 'step-recorded':
         await handleRecordedStep(message.step, sender.tab?.id);

@@ -6,14 +6,34 @@
  * after in-tab navigations).
  */
 (function () {
-  if (window.__PW_REC__ && window.__PW_REC__.installed) {
+  const root = typeof globalThis !== 'undefined' ? globalThis : window;
+
+  function uuid() {
+    if (root.crypto && typeof root.crypto.randomUUID === 'function') {
+      return root.crypto.randomUUID();
+    }
+    // Secure-context safety fallback (crypto.randomUUID is only available in
+    // secure contexts on some browsers/HTTP sites).
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = Math.floor(Math.random() * 16);
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  }
+
+  if (root.__PW_REC__ && root.__PW_REC__.installed) {
     // Already installed on this document (e.g. duplicate injection) - just
     // make sure state is resumed and exit.
-    window.__PW_REC__.setPaused(false);
+    root.__PW_REC__.setPaused(false);
     return;
   }
 
-  const engine = window.__PW_REC__.selectorEngine;
+  if (!root.__PW_REC__ || !root.__PW_REC__.selectorEngine) {
+    console.warn('[recorder] selector-engine.js was not loaded; content script aborted');
+    return;
+  }
+
+  const engine = root.__PW_REC__.selectorEngine;
   const state = {
     installed: true,
     paused: false,
@@ -23,26 +43,34 @@
       inputDebounceMs: 400,
     },
   };
-  window.__PW_REC__.setPaused = (p) => {
+  root.__PW_REC__.setPaused = (p) => {
     state.paused = p;
   };
-  window.__PW_REC__.installed = true;
+  root.__PW_REC__.installed = true;
 
   let debounceTimer = null;
   let lastInputEl = null;
 
   function send(step) {
     if (state.paused) return;
-    chrome.runtime.sendMessage({
-      type: 'step-recorded',
-      step: {
-        id: crypto.randomUUID(),
-        timestamp: Date.now(),
-        url: location.href,
-        frameId: window === window.top ? 0 : -1,
-        ...step,
-      },
-    });
+    try {
+      const result = chrome.runtime.sendMessage({
+        type: 'step-recorded',
+        step: {
+          id: uuid(),
+          timestamp: Date.now(),
+          url: location.href,
+          frameId: root === root.top ? 0 : -1,
+          ...step,
+        },
+      });
+      if (result && typeof result.catch === 'function') {
+        result.catch((e) => console.warn('[recorder] failed to send step', e));
+      }
+    } catch (e) {
+      // The content-script context can be invalidated after a navigation.
+      console.warn('[recorder] failed to send step', e);
+    }
   }
 
   function describeSelector(el) {
@@ -111,6 +139,14 @@
     if (e.key !== 'Enter' && e.key !== 'Tab') return;
     const el = e.target;
     if (!(el instanceof Element)) return;
+    const tag = el.tagName.toLowerCase();
+    const type = (el.type ? String(el.type).toLowerCase() : '');
+    if (e.key === 'Enter') {
+      // These controls already produce a click/check/select step; recording a
+      // separate Enter press would create duplicate actions.
+      if (tag === 'button' || tag === 'a' || tag === 'select') return;
+      if (tag === 'input' && ['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'file'].includes(type)) return;
+    }
     send({ action: 'press', value: e.key, ...describeSelector(el) });
   }
 
@@ -143,7 +179,12 @@
       selector: dragSourceInfo.selector,
       selectorType: dragSourceInfo.selectorType,
       cssEquivalent: dragSourceInfo.cssEquivalent,
-      meta: { targetSelector: target.selector, targetSelectorType: target.selectorType },
+      meta: {
+        targetSelector: target.selector,
+        targetSelectorType: target.selectorType,
+        targetCssEquivalent: target.cssEquivalent,
+        targetRole: target.role,
+      },
     });
     dragSourceInfo = null;
   }

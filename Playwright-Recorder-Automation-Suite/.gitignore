@@ -1,0 +1,19 @@
+# Node / Vite
+node_modules/
+dist/
+*.local
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Desktop app runtime artifacts
+run_artifacts/
+run_logs/
+reports/
+
+# OS / editor
+.DS_Store
+Thumbs.db

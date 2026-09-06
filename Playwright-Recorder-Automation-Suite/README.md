@@ -53,6 +53,26 @@ python main.py
    Log* tab; on any failure choose Skip/Retry/Abort. Check the **Report**
    tab when finished, export it, or re-run just the failed/skipped steps.
 
+## Testing
+
+- **Extension service worker** — loads `background.js`/`codegen.js` in a
+  worker-like context and exercises the message router:
+  ```bash
+  npm install
+  npm test
+  ```
+- **Desktop app core** — dependency-free unit tests for the data model,
+  code generation, project import/save/load, and report output:
+  ```bash
+  cd desktop-app
+  python -m unittest discover -s tests
+  ```
+- **Documentation site** — TypeScript check and production build:
+  ```bash
+  npm run typecheck
+  npm run build
+  ```
+
 ## Sample artifacts
 
 - `desktop-app/samples/sample_recording.json` — an example JSON export from

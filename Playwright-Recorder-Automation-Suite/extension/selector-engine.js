@@ -7,7 +7,7 @@
  *   4. unique CSS path (nth-of-type chain)
  *   5. XPath fallback
  *
- * Exposed on window.__PW_REC__.selectorEngine so it can be used from the
+ * Exposed on globalThis.__PW_REC__.selectorEngine so it can be used from the
  * plain (non-module) content script injected via chrome.scripting.
  */
 (function () {
@@ -29,7 +29,8 @@
   }
 
   function cssEscape(value) {
-    if (window.CSS && CSS.escape) return CSS.escape(value);
+    const root = typeof globalThis !== 'undefined' ? globalThis : self;
+    if (root.CSS && root.CSS.escape) return root.CSS.escape(value);
     return String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
   }
 
@@ -167,6 +168,7 @@
     return { selector: xpath, selectorType: 'xpath', cssEquivalent: xpath };
   }
 
-  window.__PW_REC__ = window.__PW_REC__ || {};
-  window.__PW_REC__.selectorEngine = { generateSelector, getVisibleText, getAccessibleRole };
+  const root = typeof globalThis !== 'undefined' ? globalThis : self;
+  root.__PW_REC__ = root.__PW_REC__ || {};
+  root.__PW_REC__.selectorEngine = { generateSelector, getVisibleText, getAccessibleRole };
 })();

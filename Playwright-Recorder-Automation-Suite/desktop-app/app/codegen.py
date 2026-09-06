@@ -39,12 +39,34 @@ def locator_expr(step: Step) -> str:
     return f"page.locator({_py_str(step.selector or 'body')})"
 
 
+def target_locator_expr(step: Step) -> str:
+    """Return a Python expression resolving the drag-and-drop target locator."""
+    meta = step.meta or {}
+    st = meta.get("targetSelectorType") or "css"
+    selector = meta.get("targetSelector") or ""
+    if st == "testid":
+        return f"page.get_by_test_id({_py_str(selector)})"
+    if st == "id":
+        return f"page.locator({_py_str('#' + str(selector))})"
+    if st == "role":
+        role = meta.get("targetRole") or "button"
+        return f"page.get_by_role({_py_str(role)}, name={_py_str(selector)})"
+    if st == "xpath":
+        target = meta.get("targetCssEquivalent") or selector or ""
+        if not str(target).startswith("xpath="):
+            target = f"xpath={target}"
+        return f"page.locator({_py_str(target)})"
+    return f"page.locator({_py_str(meta.get('targetCssEquivalent') or selector or 'body')})"
+
+
 def line_for_step(step: Step) -> str:
     action = step.action
     if action == "navigate":
         return f"page.goto({_py_str(step.url)})"
-    if action in ("click", "upload-click"):
+    if action == "click":
         return f"{locator_expr(step)}.click()"
+    if action == "upload-click":
+        return "# recorded file-picker click; file selection is captured by the upload step"
     if action == "fill":
         return f"{locator_expr(step)}.fill({_py_str(step.value)})"
     if action == "select":
@@ -60,8 +82,7 @@ def line_for_step(step: Step) -> str:
     if action == "upload":
         return f"{locator_expr(step)}.set_input_files({_py_str(step.value)})  # adjust path(s)"
     if action == "dragdrop":
-        target = (step.meta or {}).get("targetSelector", "")
-        return f"{locator_expr(step)}.drag_to(page.locator({_py_str(target)}))"
+        return f"{locator_expr(step)}.drag_to({target_locator_expr(step)})"
     if action == "wait":
         timeout = (step.waitFor or {}).get("timeout", 1000)
         return f"page.wait_for_timeout({int(timeout)})"

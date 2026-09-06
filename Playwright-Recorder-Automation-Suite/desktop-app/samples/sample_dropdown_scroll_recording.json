@@ -1,0 +1,99 @@
+{
+  "sessionId": "8f14e45f-ceea-467e-bd7c-000000000014",
+  "tabInfo": {
+    "title": "Demo Shop — Lazy Dropdown Checkout",
+    "url": "https://demo-shop.example.com/checkout"
+  },
+  "steps": [
+    {
+      "id": "c4a1d0e0-0000-4a9e-9c2e-6b6f1a2b0101",
+      "action": "navigate",
+      "selector": null,
+      "selectorType": null,
+      "value": null,
+      "url": "https://demo-shop.example.com/checkout",
+      "frameId": 0,
+      "timestamp": 1732200100000,
+      "screenshot": null,
+      "waitFor": { "type": "networkidle", "timeout": 8000 }
+    },
+    {
+      "id": "c4a1d0e0-0000-4a9e-9c2e-6b6f1a2b0102",
+      "action": "click",
+      "selector": "Country",
+      "selectorType": "role",
+      "role": "combobox",
+      "cssEquivalent": "role=combobox[name=\"Country\"]",
+      "value": null,
+      "url": "https://demo-shop.example.com/checkout",
+      "frameId": 0,
+      "timestamp": 1732200102400,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 },
+      "meta": { "tag": "input", "text": "" }
+    },
+    {
+      "id": "c4a1d0e0-0000-4a9e-9c2e-6b6f1a2b0103",
+      "action": "scroll",
+      "selector": "#country-listbox",
+      "selectorType": "css",
+      "cssEquivalent": "#country-listbox",
+      "value": 320,
+      "url": "https://demo-shop.example.com/checkout",
+      "frameId": 0,
+      "timestamp": 1732200105100,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 },
+      "meta": {
+        "top": 320,
+        "left": 0,
+        "deltaY": 320,
+        "deltaX": 0,
+        "containerTag": "ul",
+        "scrollingDocument": false
+      }
+    },
+    {
+      "id": "c4a1d0e0-0000-4a9e-9c2e-6b6f1a2b0104",
+      "action": "click",
+      "selector": "Sri Lanka",
+      "selectorType": "role",
+      "role": "option",
+      "cssEquivalent": "role=option[name=\"Sri Lanka\"]",
+      "value": null,
+      "url": "https://demo-shop.example.com/checkout",
+      "frameId": 0,
+      "timestamp": 1732200107900,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 },
+      "meta": {
+        "tag": "li",
+        "text": "Sri Lanka",
+        "fallbackCss": "#country-listbox > li:nth-of-type(41)",
+        "listboxContext": {
+          "listSelector": "country-listbox",
+          "listSelectorType": "id",
+          "listCssEquivalent": "#country-listbox",
+          "comboboxSelector": "Country",
+          "comboboxSelectorType": "role",
+          "comboboxCssEquivalent": "role=combobox[name=\"Country\"]",
+          "comboboxRole": "combobox",
+          "itemTag": "li"
+        }
+      }
+    },
+    {
+      "id": "c4a1d0e0-0000-4a9e-9c2e-6b6f1a2b0105",
+      "action": "select",
+      "selector": "shipping-method",
+      "selectorType": "testid",
+      "cssEquivalent": "[data-testid=\"shipping-method\"]",
+      "value": "express",
+      "url": "https://demo-shop.example.com/checkout",
+      "frameId": 0,
+      "timestamp": 1732200109600,
+      "screenshot": null,
+      "waitFor": { "type": "visible", "timeout": 5000 }
+    }
+  ]
+}

@@ -30,10 +30,13 @@ function makeChrome() {
   };
   const sessionData = {};
 
+  const downloadsLog = [];
+
   return {
     messageListeners,
     localData,
     sessionData,
+    downloadsLog,
     storage: {
       local: {
         async get(key) {
@@ -78,6 +81,11 @@ function makeChrome() {
     },
     scripting: {
       async executeScript() {},
+    },
+    downloads: {
+      async download({ url, filename }) {
+        downloadsLog.push({ url, filename });
+      },
     },
   };
 }
@@ -161,6 +169,8 @@ async function main() {
       { id: "4", timestamp: Date.now(), action: "upload-click", selector: "file", selectorType: "css" },
       { id: "5", timestamp: Date.now(), action: "upload", selector: "file", selectorType: "css", value: "a.txt" },
       { id: "6", timestamp: Date.now(), action: "dragdrop", selector: "src", selectorType: "css", meta: { targetSelector: "Drop here", targetSelectorType: "role", targetRole: "button", targetCssEquivalent: 'role=button[name="Drop here"]' } },
+      { id: "7", timestamp: Date.now(), action: "scroll", selector: "#country-listbox", selectorType: "css", cssEquivalent: "#country-listbox", value: 320, meta: { top: 320, left: 0, deltaY: 320, deltaX: 0 } },
+      { id: "8", timestamp: Date.now(), action: "click", selector: "Sri Lanka", selectorType: "role", role: "option", value: null, meta: { fallbackCss: "#country-listbox > li:nth-of-type(41)" } },
     ],
     { browser: "chromium" }
   );
@@ -170,6 +180,10 @@ async function main() {
   assert.match(script, /recorded file-picker click; file selection is captured by the upload step/);
   assert.match(script, /page\.locator\("file"\)\.set_input_files\("a\.txt"\)/);
   assert.match(script, /page\.locator\("src"\)\.drag_to\(page\.get_by_role\("button", name="Drop here"\)\)/);
+  // scroll steps reproduce the container scroll that populates lazy options
+  assert.match(script, /page\.locator\("#country-listbox"\)\.hover\(\)\n\s+page\.mouse\.wheel\(0, 320\)/);
+  assert.match(script, /page\.get_by_role\("option", name="Sri Lanka"\)\.click\(\)/);
+  assert.match(script, /# fallback: page\.locator\("#country-listbox > li:nth-of-type\(41\)"\)/);
 
   // 4. Basic message flow: tab discovery, state, recording lifecycle, export.
   const tabs = await callMessage(chrome, { type: "get-tabs" });
@@ -202,22 +216,49 @@ async function main() {
   assert.match(pyExport.filename, /\.py$/);
   assert.match(pyExport.dataUrl, /^data:text\/x-python;base64,/);
 
+  // 4b. Slide panel support: downloads are proxied through the worker
+  // (chrome.downloads is unavailable to content scripts).
+  const dl = await callMessage(chrome, { type: "download-export", format: "python" });
+  assert.equal(dl.ok, true);
+  assert.equal(chrome.downloadsLog.length, 1);
+  assert.match(chrome.downloadsLog[0].filename, /\.py$/);
+
+  // 4c. The slide panel can start recording on the tab it lives in (no
+  // explicit tabId -> fall back to the sender's tab).
+  await callMessage(chrome, { type: "reset-session" });
+  const panelStart = await callMessage(chrome, { type: "start-recording" }, { tab: { id: 9 } });
+  assert.equal(panelStart.ok, true);
+  const panelState = await callMessage(chrome, { type: "get-state" });
+  assert.equal(panelState.session.tabId, 9, "panel-initiated recording should target the sender tab");
+
+  const noTabStart = await callMessage(chrome, { type: "start-recording" });
+  assert.equal(noTabStart.ok, false, "start-recording without any tab should fail cleanly");
+
+  const showPanel = await callMessage(chrome, { type: "show-panel", tabId: 9 });
+  assert.equal(showPanel.ok, true, "show-panel should inject and reveal the panel");
+
+  await callMessage(chrome, { type: "stop-recording" });
+
   // 5. Settings round-trip follows the same shape.
+  const initialSettings = (await callMessage(chrome, { type: "get-state" })).settings;
+  assert.equal(initialSettings.captureScrolls, true, "scroll capture should default to on");
   const updated = await callMessage(chrome, {
     type: "update-settings",
-    settings: { captureHovers: true, bridgeHost: "localhost", bridgePort: 8888, bridgeToken: "tok" },
+    settings: { captureHovers: true, captureScrolls: false, bridgeHost: "localhost", bridgePort: 8888, bridgeToken: "tok" },
   });
   assert.equal(updated.settings.captureHovers, true);
+  assert.equal(updated.settings.captureScrolls, false);
   assert.equal(updated.settings.bridgePort, 8888);
 
-  // 6. Content + selector + popup files parse fine (syntax guard).
+  // 6. Content + selector + panel + popup files parse fine (syntax guard).
   assert.doesNotThrow(() => new Function(read("selector-engine.js")), "selector-engine.js should parse");
   assert.doesNotThrow(() => new Function(read("content.js")), "content.js should parse");
+  assert.doesNotThrow(() => new Function(read("recorder-panel.js")), "recorder-panel.js should parse");
   assert.doesNotThrow(() => new Function(read("popup.js")), "popup.js should parse");
 
   // 7. Popup references every element it uses.
   const popupHtml = read("popup.html");
-  for (const id of ["btnRecord", "btnPause", "btnResume", "btnStop", "btnNewSession", "btnExportJson", "btnExportPy", "cfgScreenshots", "cfgHovers", "cfgIgnoreDomains", "cfgHost", "cfgPort", "cfgToken", "cfgAutoConnect", "btnSaveSettings", "btnConnectBridge", "btnDisconnectBridge", "stepsList", "tabList"]) {
+  for (const id of ["btnRecord", "btnPause", "btnResume", "btnStop", "btnNewSession", "btnExportJson", "btnExportPy", "btnShowPanel", "cfgScreenshots", "cfgHovers", "cfgScrolls", "cfgIgnoreDomains", "cfgHost", "cfgPort", "cfgToken", "cfgAutoConnect", "btnSaveSettings", "btnConnectBridge", "btnDisconnectBridge", "stepsList", "tabList"]) {
     assert.match(popupHtml, new RegExp(`id="${id}"`), `popup.html should contain #${id}`);
   }
 

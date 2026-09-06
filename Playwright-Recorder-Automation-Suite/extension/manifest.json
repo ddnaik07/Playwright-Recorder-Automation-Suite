@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Playwright Recorder & Automation Bridge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Record browser interactions on any open tab and export them as JSON steps or a Playwright Python script. Optionally streams steps live to the companion desktop app over a local WebSocket bridge.",
   "action": {
     "default_popup": "popup.html",

@@ -138,6 +138,55 @@ class CodegenTests(unittest.TestCase):
         self.assertEqual(locator_expr(Step(action="click", selectorType="css", selector=".a", cssEquivalent=".a")), 'page.locator(".a")')
         self.assertIn("get_by_role", locator_expr(Step(action="click", selectorType="role", selector="Save", role="button")))
 
+    def test_scroll_step_codegen(self):
+        """Scroll steps replay as hover + mouse.wheel so lazily populated
+        dropdown options render before the following option click."""
+        step = Step(
+            action="scroll",
+            selector="#country-listbox",
+            selectorType="css",
+            cssEquivalent="#country-listbox",
+            value=320,
+            meta={"top": 320, "left": 0, "deltaY": 320, "deltaX": 0},
+        )
+        line = line_for_step(step)
+        self.assertIn('page.locator("#country-listbox").hover()', line)
+        self.assertIn("page.mouse.wheel(0, 320)", line)
+
+        # Without a delta, fall back to the recorded absolute scrollTop.
+        step_no_delta = Step(action="scroll", selector="#list", selectorType="css", cssEquivalent="#list", value=240, meta={})
+        self.assertIn("page.mouse.wheel(0, 240)", line_for_step(step_no_delta))
+
+        # A zero scroll degrades to a plain hover (no wheel event).
+        step_zero = Step(action="scroll", selector="#list", selectorType="css", cssEquivalent="#list", value=0, meta={"deltaY": 0})
+        self.assertEqual(line_for_step(step_zero), 'page.locator("#list").hover()')
+
+    def test_option_click_codegen_with_fallback(self):
+        step = Step(
+            action="click",
+            selector="Sri Lanka",
+            selectorType="role",
+            role="option",
+            meta={"fallbackCss": "#country-listbox li:nth-of-type(41)"},
+        )
+        script = generate_playwright_script([step])
+        self.assertIn('page.get_by_role("option", name="Sri Lanka").click()', script)
+        self.assertIn('# fallback: page.locator("#country-listbox li:nth-of-type(41)")', script)
+
+    def test_import_dropdown_scroll_sample(self):
+        sample = os.path.join(os.path.dirname(__file__), "..", "samples", "sample_dropdown_scroll_recording.json")
+        script = import_recording_file(sample)
+        actions = [s.action for s in script.steps]
+        self.assertEqual(actions, ["navigate", "click", "scroll", "click", "select"])
+        scroll = script.steps[2]
+        self.assertEqual(scroll.selectorType, "css")
+        self.assertEqual(scroll.meta["deltaY"], 320)
+        option_click = script.steps[3]
+        self.assertEqual(option_click.selectorType, "role")
+        self.assertEqual(option_click.role, "option")
+        self.assertIn("fallbackCss", option_click.meta)
+        self.assertIn("listboxContext", option_click.meta)
+
 
 class ReportTests(unittest.TestCase):
     def _run_result(self):

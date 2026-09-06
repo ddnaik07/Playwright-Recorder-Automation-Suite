@@ -74,6 +74,15 @@ $('#btnNewSession').addEventListener('click', async () => {
   await send({ type: 'reset-session' });
   refresh();
 });
+$('#btnShowPanel').addEventListener('click', async () => {
+  const target = currentState?.session?.tabId || selectedTabId;
+  if (!target) return;
+  const res = await send({ type: 'show-panel', tabId: target });
+  if (!res || res.ok !== true) {
+    console.warn('[recorder] could not open slide panel', res);
+  }
+  window.close();
+});
 
 function download(filename, dataUrl) {
   chrome.downloads.download({ url: dataUrl, filename, saveAs: false }).catch((err) => {
@@ -158,6 +167,7 @@ function loadSettingsIntoForm(settings) {
   if (!settings) return;
   $('#cfgScreenshots').checked = !!settings.captureScreenshots;
   $('#cfgHovers').checked = !!settings.captureHovers;
+  $('#cfgScrolls').checked = settings.captureScrolls !== false;
   $('#cfgIgnoreDomains').value = (settings.ignoreDomains || []).join('\n');
   $('#cfgHost').value = settings.bridgeHost;
   $('#cfgPort').value = settings.bridgePort;
@@ -169,6 +179,7 @@ $('#btnSaveSettings').addEventListener('click', async () => {
   const settings = {
     captureScreenshots: $('#cfgScreenshots').checked,
     captureHovers: $('#cfgHovers').checked,
+    captureScrolls: $('#cfgScrolls').checked,
     ignoreDomains: $('#cfgIgnoreDomains')
       .value.split('\n')
       .map((s) => s.trim())

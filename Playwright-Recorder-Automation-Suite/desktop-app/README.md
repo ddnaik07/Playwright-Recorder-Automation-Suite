@@ -34,6 +34,10 @@ python main.py
   All, Run Selected Step, Pause, Resume, Stop/Abort. A screenshot is
   captured automatically on any step failure (saved under
   `run_artifacts/`).
+  `scroll` steps (recorded from scrollable dropdown lists that lazy-load
+  their options) replay as hover + `page.mouse.wheel`, and clicks recorded
+  with a `meta.fallbackCss` selector are automatically retried against that
+  fallback once before a failure is surfaced.
 - **Live logging** — the *Live Log* tab streams `pending → running →
   passed/failed/skipped` events as they happen. On failure, execution pauses
   and a dialog lets you **Skip**, **Retry**, or **Abort** the run. Every run

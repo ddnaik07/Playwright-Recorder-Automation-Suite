@@ -36,8 +36,22 @@ Every recorded interaction is serialized as a single **Step** object:
 | `check` / `uncheck` | Checkbox/radio toggled | boolean |
 | `press` | Enter/Tab key press | `"Enter"` \| `"Tab"` |
 | `hover` | Mouse hover (optional capture) | `null` |
+| `scroll` | Scrolled inside a container (or the page). Recorded so replay can reproduce lazy/virtualized lists — e.g. dropdowns that only populate options while the list is scrolled | final `scrollTop` (number) |
 | `dragdrop` | Drag-and-drop gesture | `null` (see `meta.targetSelector`) |
 | `upload-click` / `upload` | File input interaction | comma-joined file names |
+
+### Action-specific `meta` fields
+
+- `scroll` steps carry `meta: { top, left, deltaY, deltaX, containerTag, scrollingDocument }`.
+  Replayers should hover the container and send a wheel event of `deltaY` (see
+  `executor.py` / `codegen.py`), which reproduces the scroll that populates
+  lazily-loaded dropdown options.
+- `click` steps on custom-dropdown options carry
+  `meta.listboxContext: { listSelector, listSelectorType, listCssEquivalent, comboboxSelector?, comboboxSelectorType?, comboboxCssEquivalent?, comboboxRole?, itemTag }`
+  describing the open list container and the combobox input that controls it.
+- Role/text-selector clicks may carry `meta.fallbackCss` — a positional CSS
+  selector for the same element. The executor retries a failed step with this
+  fallback once before surfacing the failure.
 
 ### `selectorType` priority
 

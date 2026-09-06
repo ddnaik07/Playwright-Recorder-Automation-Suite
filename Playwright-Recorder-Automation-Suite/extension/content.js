@@ -40,6 +40,7 @@
     settings: {
       captureScreenshots: false,
       captureHovers: false,
+      captureScrolls: true,
       inputDebounceMs: 400,
     },
   };
@@ -50,6 +51,51 @@
 
   let debounceTimer = null;
   let lastInputEl = null;
+
+  // ---------------------------------------------------------------------------
+  // Recorder-UI guards & target resolution
+  // ---------------------------------------------------------------------------
+
+  /**
+   * True when the event originates from the recorder's own in-page slide
+   * panel (recorder-panel.js). Panel interactions must never be recorded.
+   * The panel lives in a closed shadow DOM attached to a host element that
+   * both scripts can see, so a simple identity check is enough.
+   */
+  function isPanelEvent(e) {
+    const host = root.__PW_REC__ && root.__PW_REC__.panelHost;
+    if (!host) return false;
+    if (e.target === host) return true;
+    if (typeof e.composedPath === 'function') {
+      try {
+        const path = e.composedPath();
+        return path && path.includes(host);
+      } catch (err) {
+        return false;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Resolve the deepest element an event actually hit. For content inside
+   * open shadow roots, e.target is retargeted to the host at document level,
+   * but composedPath() still exposes the real inner element - which gives far
+   * better selectors for clicks inside shadowed dropdowns.
+   */
+  function eventTarget(e) {
+    if (typeof e.composedPath === 'function') {
+      try {
+        const path = e.composedPath();
+        for (let i = 0; i < path.length; i += 1) {
+          if (path[i] instanceof Element) return path[i];
+        }
+      } catch (err) {
+        /* fall through to e.target */
+      }
+    }
+    return e.target instanceof Element ? e.target : null;
+  }
 
   function send(step) {
     if (state.paused) return;
@@ -73,72 +119,122 @@
     }
   }
 
-  function describeSelector(el) {
-    const { selector, selectorType, cssEquivalent, role } = engine.generateSelector(el);
-    return { selector, selectorType, cssEquivalent, role };
+  function describeSelector(el, opts) {
+    const { selector, selectorType, cssEquivalent, role, fallbackCss, meta } = engine.generateSelector(
+      el,
+      opts
+    );
+    const described = { selector, selectorType, cssEquivalent, role };
+    if (fallbackCss) described.fallbackCss = fallbackCss;
+    if (meta) described.clickedMeta = meta;
+    return described;
+  }
+
+  /**
+   * Extra context for clicks on custom-dropdown options: the list container
+   * and, when discoverable, the combobox input that owns it. This lets the
+   * executor / generated scripts reopen the dropdown if the option is not
+   * visible yet.
+   */
+  function dropdownClickContext(el) {
+    const owner = engine.listOwnerFor ? engine.listOwnerFor(el) : null;
+    if (!owner) return null;
+    const item = engine.nearestDropdownItem ? engine.nearestDropdownItem(el) : el;
+    const context = {};
+    const list = describeSelector(owner, { noItemResolve: true, withFallback: false });
+    context.listSelector = list.selector;
+    context.listSelectorType = list.selectorType;
+    context.listCssEquivalent = list.cssEquivalent;
+    const combo = engine.controllingCombobox ? engine.controllingCombobox(owner) : null;
+    if (combo && combo !== el) {
+      const c = describeSelector(combo, { noItemResolve: true, withFallback: false });
+      context.comboboxSelector = c.selector;
+      context.comboboxSelectorType = c.selectorType;
+      context.comboboxCssEquivalent = c.cssEquivalent;
+      context.comboboxRole = c.role;
+    }
+    context.itemTag = item ? item.tagName.toLowerCase() : undefined;
+    return context;
   }
 
   function onClick(e) {
     if (state.paused) return;
-    const el = e.target;
-    if (!(el instanceof Element)) return;
+    if (isPanelEvent(e)) return;
+    const el = eventTarget(e);
+    if (!el) return;
     // Ignore clicks that are actually about to trigger a file picker; those
     // are captured separately by the 'upload-trigger' handler below.
     if (el.tagName === 'INPUT' && el.type === 'file') {
       send({ action: 'upload-click', value: null, ...describeSelector(el) });
       return;
     }
+    const listboxContext = dropdownClickContext(el);
+    const described = describeSelector(el, { withFallback: true });
+    const meta = {
+      tag: el.tagName.toLowerCase(),
+      text: engine.getVisibleText(el),
+    };
+    if (listboxContext) meta.listboxContext = listboxContext;
+    if (described.fallbackCss) meta.fallbackCss = described.fallbackCss;
+    if (described.clickedMeta) Object.assign(meta, described.clickedMeta);
     send({
       action: 'click',
       value: null,
-      ...describeSelector(el),
-      meta: { tag: el.tagName.toLowerCase(), text: engine.getVisibleText(el) },
+      selector: described.selector,
+      selectorType: described.selectorType,
+      cssEquivalent: described.cssEquivalent,
+      role: described.role,
+      meta,
     });
   }
 
+
   function onInput(e) {
     if (state.paused) return;
-    const el = e.target;
-    if (!(el instanceof Element)) return;
+    if (isPanelEvent(e)) return;
+    const el = eventTarget(e);
+    if (!el) return;
     const tag = el.tagName.toLowerCase();
     if (tag !== 'input' && tag !== 'textarea') return;
     if (el.type === 'checkbox' || el.type === 'radio' || el.type === 'file') return;
     lastInputEl = el;
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
-      send({ action: 'fill', value: el.value, ...describeSelector(el) });
+      send({ action: 'fill', value: el.value, ...describeSelector(el, { noItemResolve: true }) });
     }, state.settings.inputDebounceMs);
   }
 
   function onChange(e) {
     if (state.paused) return;
-    const el = e.target;
-    if (!(el instanceof Element)) return;
+    if (isPanelEvent(e)) return;
+    const el = eventTarget(e);
+    if (!el) return;
     const tag = el.tagName.toLowerCase();
     if (tag === 'select') {
-      send({ action: 'select', value: el.value, ...describeSelector(el) });
+      send({ action: 'select', value: el.value, ...describeSelector(el, { noItemResolve: true }) });
     } else if (tag === 'input' && (el.type === 'checkbox' || el.type === 'radio')) {
       send({
         action: el.checked ? 'check' : 'uncheck',
         value: el.checked,
-        ...describeSelector(el),
+        ...describeSelector(el, { noItemResolve: true }),
       });
     } else if (tag === 'input' && el.type === 'file') {
       const names = el.files ? Array.from(el.files).map((f) => f.name) : [];
-      send({ action: 'upload', value: names.join(', '), ...describeSelector(el) });
+      send({ action: 'upload', value: names.join(', '), ...describeSelector(el, { noItemResolve: true }) });
     } else if (tag === 'input' || tag === 'textarea') {
       // Fire an immediate fill on change to make sure the final value is
       // captured even if the debounce timer was cleared by a blur.
       clearTimeout(debounceTimer);
-      send({ action: 'fill', value: el.value, ...describeSelector(el) });
+      send({ action: 'fill', value: el.value, ...describeSelector(el, { noItemResolve: true }) });
     }
   }
 
   function onKeydown(e) {
     if (state.paused) return;
+    if (isPanelEvent(e)) return;
     if (e.key !== 'Enter' && e.key !== 'Tab') return;
-    const el = e.target;
-    if (!(el instanceof Element)) return;
+    const el = eventTarget(e);
+    if (!el) return;
     const tag = el.tagName.toLowerCase();
     const type = (el.type ? String(el.type).toLowerCase() : '');
     if (e.key === 'Enter') {
@@ -147,31 +243,88 @@
       if (tag === 'button' || tag === 'a' || tag === 'select') return;
       if (tag === 'input' && ['button', 'submit', 'reset', 'checkbox', 'radio', 'range', 'file'].includes(type)) return;
     }
-    send({ action: 'press', value: e.key, ...describeSelector(el) });
+    send({ action: 'press', value: e.key, ...describeSelector(el, { noItemResolve: true }) });
   }
 
   let hoverTimer = null;
   function onMouseOver(e) {
     if (state.paused || !state.settings.captureHovers) return;
-    const el = e.target;
-    if (!(el instanceof Element)) return;
+    if (isPanelEvent(e)) return;
+    const el = eventTarget(e);
+    if (!el) return;
     clearTimeout(hoverTimer);
     hoverTimer = setTimeout(() => {
       send({ action: 'hover', value: null, ...describeSelector(el) });
     }, 600);
   }
 
+  // ---------------------------------------------------------------------------
+  // Scroll capture
+  //
+  // Many custom dropdowns only populate their options while the list is being
+  // scrolled (lazy loading / windowed rendering). Recording the scroll itself
+  // lets replay reproduce the same population before clicking an option.
+  // ---------------------------------------------------------------------------
+
+  const scrollTrackers = new WeakMap(); // container -> { timer, lastTop, lastLeft }
+
+  function onScroll(e) {
+    if (state.paused || !state.settings.captureScrolls) return;
+    if (isPanelEvent(e)) return;
+    let container = null;
+    const t = e.target;
+    if (t === document || t === document.documentElement || t === root) {
+      container = document.scrollingElement || document.documentElement;
+    } else if (t instanceof Element) {
+      container = t;
+    }
+    if (!container) return;
+
+    const top = container.scrollTop || 0;
+    const left = container.scrollLeft || 0;
+    let tracker = scrollTrackers.get(container);
+    if (!tracker) {
+      tracker = { timer: null, lastTop: 0, lastLeft: 0 };
+      scrollTrackers.set(container, tracker);
+    }
+    clearTimeout(tracker.timer);
+    const captured = tracker;
+    captured.timer = setTimeout(() => {
+      const deltaY = Math.round(top - captured.lastTop);
+      const deltaX = Math.round(left - captured.lastLeft);
+      captured.lastTop = top;
+      captured.lastLeft = left;
+      // Ignore sub-pixel/rest-position jitters.
+      if (Math.abs(deltaY) < 4 && Math.abs(deltaX) < 4) return;
+      send({
+        action: 'scroll',
+        value: Math.round(top),
+        ...describeSelector(container, { noItemResolve: true }),
+        meta: {
+          top: Math.round(top),
+          left: Math.round(left),
+          deltaY,
+          deltaX,
+          containerTag: container.tagName ? container.tagName.toLowerCase() : null,
+          scrollingDocument: container === document.documentElement || container === document.body,
+        },
+      });
+    }, 300);
+  }
+
   let dragSourceInfo = null;
   function onDragStart(e) {
     if (state.paused) return;
-    const el = e.target;
-    if (!(el instanceof Element)) return;
+    if (isPanelEvent(e)) return;
+    const el = eventTarget(e);
+    if (!el) return;
     dragSourceInfo = describeSelector(el);
   }
   function onDrop(e) {
     if (state.paused || !dragSourceInfo) return;
-    const el = e.target;
-    if (!(el instanceof Element)) return;
+    if (isPanelEvent(e)) return;
+    const el = eventTarget(e);
+    if (!el) return;
     const target = describeSelector(el);
     send({
       action: 'dragdrop',
@@ -194,6 +347,7 @@
   document.addEventListener('change', onChange, true);
   document.addEventListener('keydown', onKeydown, true);
   document.addEventListener('mouseover', onMouseOver, true);
+  document.addEventListener('scroll', onScroll, true);
   document.addEventListener('dragstart', onDragStart, true);
   document.addEventListener('drop', onDrop, true);
 

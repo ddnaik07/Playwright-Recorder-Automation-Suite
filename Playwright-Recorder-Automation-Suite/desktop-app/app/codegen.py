@@ -79,6 +79,22 @@ def line_for_step(step: Step) -> str:
         return f"{locator_expr(step)}.press({_py_str(step.value)})"
     if action == "hover":
         return f"{locator_expr(step)}.hover()"
+    if action == "scroll":
+        # Scroll inside a container (e.g. a dropdown listbox that populates
+        # its options lazily while scrolling): hover the container, then send
+        # the recorded wheel delta so lazy options render before the click.
+        meta = step.meta or {}
+        delta = meta.get("deltaY")
+        if delta is None or int(delta) == 0:
+            delta = step.value if step.value not in (None, "") else 0
+        lines = [f"{locator_expr(step)}.hover()"]
+        try:
+            amount = int(float(delta))
+        except (TypeError, ValueError):
+            amount = 0
+        if amount:
+            lines.append(f"page.mouse.wheel(0, {amount})")
+        return "\n        ".join(lines)
     if action == "upload":
         return f"{locator_expr(step)}.set_input_files({_py_str(step.value)})  # adjust path(s)"
     if action == "dragdrop":
@@ -122,6 +138,9 @@ def generate_playwright_script(
         ts = datetime.fromtimestamp(step.timestamp / 1000, tz=timezone.utc).isoformat()
         lines.append(f"        # step {step.id} @ {ts} ({step.selectorType})")
         lines.append("        " + line_for_step(step))
+        fallback = (step.meta or {}).get("fallbackCss")
+        if fallback:
+            lines.append(f"        # fallback: page.locator({_py_str(fallback)})")
         lines.append("        page.wait_for_timeout(150)")
         lines.append("")
     lines.append("        context.close()")

@@ -20,13 +20,50 @@ local WebSocket bridge.
 3. Click **Record**. The content script is injected into the chosen tab and
    starts capturing clicks, input/typing (debounced), select/dropdown
    changes, checkbox/radio toggles, Enter/Tab key presses, in-tab
-   navigation, hovers (optional), drag-and-drop, and file-input clicks.
+   navigation, hovers (optional), scrolls inside scrollable containers,
+   drag-and-drop, and file-input clicks.
 4. Use **Pause/Resume** to temporarily stop capturing without ending the
    session, and **Stop** to finalize it.
-5. While recording, the step list updates live; click the ✕ next to a step
-   to delete a mis-captured entry before stopping.
+5. While recording, the step list updates live (in the popup and in the
+   in-page slide panel); click the ✕ next to a step to delete a
+   mis-captured entry before stopping.
 6. After stopping, download the session as **JSON** and/or a generated
    **Playwright Python script** (`.py`), or start a new recording.
+
+## In-page slide panel
+
+When recording starts (or when you press **⇱ Open slide panel in tab** in the
+popup), a floating panel slides in from the right edge of the recorded page:
+
+- **Draggable** — grab the header (or the collapsed pill) and move it
+  anywhere on the page; the position is remembered across navigations.
+- **Collapsible** — press `–` to shrink it to a small pill; click the pill to
+  bring it back.
+- **Live controls** — Record / Pause / Resume / Stop, the live step list with
+  per-step delete, and JSON / `.py` export once stopped. Interactions inside
+  the panel are never recorded.
+- The panel renders in a closed shadow DOM, so page styles cannot break it
+  and it cannot leak events into the recorded page.
+
+## Scrollable / lazy-loading dropdowns
+
+Dropdowns whose options only appear while the list is scrolled (lazy loading,
+windowed/virtualized lists — MUI, Ant Design, React-Select, …) are recorded as:
+
+1. `click` on the combobox,
+2. `scroll` inside the list container (captures the wheel delta),
+3. `click` on the option — resolved to a resilient `role=option` /
+   `role=listitem` + text locator (no brittle `nth-of-type` paths), plus
+   `meta.fallbackCss` and `meta.listboxContext` (the owning combobox and list
+   container) for replay.
+
+Replay (desktop executor or generated `.py`) hovers the recorded container
+and sends `page.mouse.wheel(0, deltaY)` so the options populate before the
+option click runs, and retries a failed role-locator click once with the
+recorded CSS fallback.
+
+You can try the whole flow against `test-pages/lazy-dropdown.html` in the
+repo root.
 
 ## Settings panel
 
@@ -37,6 +74,9 @@ local WebSocket bridge.
   `chrome.tabs.captureVisibleTab`, throttled to respect Chrome's rate
   limits).
 - **Hover capture** — optional, off by default (noisy).
+- **Scroll capture** — on by default. Records `scroll` steps for scrollable
+  containers and the page; needed for dropdowns that load their options on
+  scroll. Turn it off if your recordings pick up too many scroll steps.
 - **Domain ignore-list** — interactions on these hostnames are skipped.
 - **Bridge server** — host/port/shared-secret token for the desktop app's
   local WebSocket bridge (`ws://127.0.0.1:8765` by default), plus a
@@ -49,7 +89,8 @@ local WebSocket bridge.
 | `manifest.json` | MV3 manifest, permissions, popup/background wiring |
 | `background.js` | Service worker: session state machine, tab injection & re-injection across navigations, screenshot capture, WebSocket bridge client, export generation, message router |
 | `content.js` | Injected into the recorded tab; listens for DOM events and posts step objects to the background worker |
-| `selector-engine.js` | Resilient selector generation (testid → id → role/text → CSS → XPath) |
+| `recorder-panel.js` | Draggable in-page slide panel: live step list, recording controls, exports (closed shadow DOM) |
+| `selector-engine.js` | Resilient selector generation (testid → id → role/text → CSS → XPath), incl. dropdown-option resolution and CSS fallbacks |
 | `codegen.js` | Client-side Playwright Python code generator (mirrors `desktop-app/app/codegen.py`) |
 | `popup.html/js/css` | UI: tab picker, record/pause/stop controls, live step list, settings panel, bridge indicator |
 

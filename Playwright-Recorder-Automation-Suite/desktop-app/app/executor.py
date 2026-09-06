@@ -181,7 +181,20 @@ class RunnerThread(QThread):
             pages[f"tab_{len(pages)}"] = new_page
             page = new_page
 
-        locator = self._resolve(page, step)
+        try:
+            return self._execute_action(page, step, self._resolve(page, step), timeout)
+        except Exception:
+            # Role/text locators recorded against dynamic dropdown lists can
+            # miss at replay time (options repopulated differently). When the
+            # recorder stored a positional CSS fallback, retry once with it.
+            fallback = (step.meta or {}).get("fallbackCss")
+            if not fallback or action in ("navigate", "upload", "upload-click", "wait", "scroll"):
+                raise
+            self.log.emit(f"  retrying with fallback selector: {fallback}")
+            return self._execute_action(page, step, page.locator(fallback), timeout)
+
+    def _execute_action(self, page, step: Step, locator, timeout: int):
+        action = step.action
 
         if action == "click":
             locator.click(timeout=timeout)
@@ -201,6 +214,21 @@ class RunnerThread(QThread):
             locator.press(str(step.value or "Enter"), timeout=timeout)
         elif action == "hover":
             locator.hover(timeout=timeout)
+        elif action == "scroll":
+            # Reproduce a scroll *inside* a container (dropdown listboxes that
+            # lazy-load their options only while scrolling). Hovering first
+            # puts the wheel input over the right element.
+            meta = step.meta or {}
+            delta = meta.get("deltaY")
+            if delta is None or int(float(delta)) == 0:
+                delta = step.value if step.value not in (None, "") else 0
+            try:
+                amount = int(float(delta))
+            except (TypeError, ValueError):
+                amount = 0
+            locator.hover(timeout=timeout)
+            if amount:
+                page.mouse.wheel(0, amount)
         elif action == "upload":
             files = [f.strip() for f in str(step.value or "").split(",") if f.strip()]
             locator.set_input_files(files, timeout=timeout)

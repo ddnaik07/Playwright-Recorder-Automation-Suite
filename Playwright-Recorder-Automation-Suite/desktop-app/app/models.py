@@ -23,6 +23,7 @@ class Action(str, Enum):
     UNCHECK = "uncheck"
     PRESS = "press"
     HOVER = "hover"
+    SCROLL = "scroll"
     DRAGDROP = "dragdrop"
     UPLOAD = "upload"
     UPLOAD_CLICK = "upload-click"

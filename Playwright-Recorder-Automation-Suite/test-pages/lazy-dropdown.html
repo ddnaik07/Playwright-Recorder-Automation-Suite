@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Lazy Scrollable Dropdown — Recorder Test Page</title>
+  <style>
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0; padding: 32px 16px 96px; background: #f6f7fb; color: #1a1c23;
+    }
+    .wrap { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+    h1 { font-size: 20px; margin: 0 0 4px; }
+    h2 { font-size: 15px; margin: 0 0 8px; }
+    p.hint { font-size: 13px; color: #6b7280; line-height: 1.55; margin: 0 0 12px; }
+    .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; }
+    code { background: #eef2ff; border-radius: 5px; padding: 1px 5px; font-size: 12px; }
+
+    /* --- Custom combobox with a lazily-populated, scrollable listbox ----- */
+    .combo { position: relative; }
+    .combo input {
+      width: 100%; padding: 10px 12px; font-size: 14px;
+      border: 1px solid #d1d5db; border-radius: 8px;
+    }
+    .combo input:focus { outline: 2px solid #6366f1; outline-offset: 1px; }
+    ul.listbox {
+      list-style: none; margin: 4px 0 0; padding: 4px;
+      max-height: 208px; overflow-y: auto;
+      border: 1px solid #d1d5db; border-radius: 8px; background: #fff;
+    }
+    ul.listbox[hidden] { display: none; }
+    ul.listbox li {
+      padding: 8px 10px; border-radius: 6px; font-size: 13px; cursor: pointer;
+    }
+    ul.listbox li:hover, ul.listbox li.active { background: #eef2ff; }
+    ul.listbox li.loading { color: #9ca3af; font-style: italic; }
+    .status { margin-top: 8px; font-size: 12px; color: #6b7280; min-height: 16px; }
+    select { padding: 8px 10px; font-size: 14px; border: 1px solid #d1d5db; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <h1>Lazy scrollable dropdown — regression page</h1>
+      <p class="hint">
+        This page reproduces the dropdown bug: the listbox below renders only its first
+        8 options. More options are fetched (simulated) <strong>only while you scroll inside
+        the open list</strong>. Recording must capture the in-list <code>scroll</code> step so
+        replay can populate the options before clicking one.
+      </p>
+    </div>
+
+    <div class="card">
+      <h2>1) Custom combobox (options load on scroll)</h2>
+      <div class="combo">
+        <input
+          id="country-input"
+          role="combobox"
+          aria-expanded="false"
+          aria-controls="country-listbox"
+          aria-autocomplete="list"
+          placeholder="Pick a country…"
+          readonly
+        />
+        <ul id="country-listbox" role="listbox" aria-label="Country" class="listbox" hidden></ul>
+      </div>
+      <div class="status" id="country-status">Closed. Click the input to open.</div>
+    </div>
+
+    <div class="card">
+      <h2>2) Native &lt;select&gt; (long list, needs scrolling)</h2>
+      <select id="city-select" aria-label="City">
+        <option value="">Select a city…</option>
+      </select>
+      <div class="status" id="city-status">Nothing selected.</div>
+    </div>
+
+    <div class="card">
+      <h2>Expected recorded steps for card 1</h2>
+      <p class="hint" style="margin:0">
+        1. <code>click</code> combobox “Country” ·
+        2. <code>scroll</code> on <code>#country-listbox</code> ·
+        3. <code>click</code> <code>role=option</code> “…” (with <code>meta.fallbackCss</code> and
+        <code>meta.listboxContext</code>) — replay scrolls the list first, so the lazy option
+        exists before it is clicked.
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // --- Fake country data -----------------------------------------------------
+    const COUNTRIES = [
+      "Afghanistan", "Albania", "Algeria", "Argentina", "Armenia", "Australia", "Austria",
+      "Bangladesh", "Belarus", "Belgium", "Bhutan", "Bolivia", "Botswana", "Brazil",
+      "Cambodia", "Cameroon", "Canada", "Chile", "China", "Colombia", "Croatia", "Cuba",
+      "Czechia", "Denmark", "Ecuador", "Egypt", "Estonia", "Ethiopia", "Fiji", "Finland",
+      "France", "Georgia", "Germany", "Ghana", "Greece", "Guatemala", "Honduras", "Hungary",
+      "Iceland", "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy",
+      "Jamaica", "Japan", "Jordan", "Kenya", "Kiribati", "Kuwait", "Laos", "Latvia",
+      "Lebanon", "Lesotho", "Liberia", "Libya", "Lithuania", "Malawi", "Malaysia",
+      "Maldives", "Mali", "Malta", "Mauritius", "Mexico", "Moldova", "Monaco", "Mongolia",
+      "Morocco", "Myanmar", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger",
+      "Nigeria", "Norway", "Oman", "Pakistan", "Panama", "Paraguay", "Peru", "Poland",
+      "Portugal", "Qatar", "Romania", "Rwanda", "Samoa", "Saudi Arabia", "Senegal",
+      "Serbia", "Singapore", "Slovakia", "Slovenia", "Somalia", "South Africa", "Spain",
+      "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland", "Syria", "Taiwan",
+      "Tanzania", "Thailand", "Togo", "Tonga", "Tunisia", "Turkey", "Uganda", "Ukraine",
+      "Uruguay", "Uzbekistan", "Vanuatu", "Venezuela", "Vietnam", "Yemen", "Zambia",
+      "Zimbabwe",
+    ];
+
+    const input = document.getElementById("country-input");
+    const listbox = document.getElementById("country-listbox");
+    const status = document.getElementById("country-status");
+    let rendered = 0;      // how many options are in the DOM right now
+    let fetching = false;  // a "network" fetch of the next batch is in flight
+
+    function optionEl(country, index) {
+      const li = document.createElement("li");
+      li.setAttribute("role", "option");
+      li.dataset.value = country.toLowerCase().replace(/\s+/g, "-");
+      li.dataset.index = String(index);
+      li.textContent = country;
+      return li;
+    }
+
+    function renderBatch() {
+      const next = Math.min(rendered + 8, COUNTRIES.length);
+      for (let i = rendered; i < next; i += 1) listbox.appendChild(optionEl(COUNTRIES[i], i));
+      rendered = next;
+      // Lazy "loader row" that keeps the list scrollable until everything is in.
+      if (rendered < COUNTRIES.length) {
+        const loader = document.createElement("li");
+        loader.className = "loading";
+        loader.id = "country-loader";
+        loader.textContent = "Loading more countries…";
+        listbox.appendChild(loader);
+      } else {
+        const loader = document.getElementById("country-loader");
+        if (loader) loader.remove();
+      }
+    }
+
+    function openList() {
+      listbox.hidden = false;
+      input.setAttribute("aria-expanded", "true");
+      status.textContent = `Open — ${rendered}/${COUNTRIES.length} options rendered. Scroll inside the list to load more.`;
+    }
+
+    function closeList() {
+      listbox.hidden = true;
+      input.setAttribute("aria-expanded", "false");
+      status.textContent = `Closed — ${rendered}/${COUNTRIES.length} options rendered.`;
+    }
+
+    input.addEventListener("click", () => {
+      if (listbox.hidden) {
+        if (rendered === 0) renderBatch();
+        openList();
+      } else {
+        closeList();
+      }
+    });
+
+    // THE LAZY BIT: scrolling near the bottom fetches more options, exactly
+    // like virtualized/async dropdowns do in real apps.
+    listbox.addEventListener("scroll", () => {
+      if (fetching || rendered >= COUNTRIES.length) return;
+      const nearBottom =
+        listbox.scrollTop + listbox.clientHeight >= listbox.scrollHeight - 60;
+      if (!nearBottom) return;
+      fetching = true;
+      const loader = document.getElementById("country-loader");
+      if (loader) loader.textContent = "Fetching…";
+      setTimeout(() => {
+        const keepScroll = listbox.scrollTop;
+        const loaderRow = document.getElementById("country-loader");
+        if (loaderRow) loaderRow.remove();
+        renderBatch();
+        listbox.scrollTop = keepScroll;
+        fetching = false;
+        status.textContent = `Open — ${rendered}/${COUNTRIES.length} options rendered.`;
+      }, 180);
+    });
+
+    listbox.addEventListener("click", (e) => {
+      const li = e.target.closest("li[role=option]");
+      if (!li) return;
+      input.value = li.textContent;
+      input.dataset.selected = li.dataset.value;
+      closeList();
+      status.textContent = `Selected “${li.textContent}” (was at index ${li.dataset.index} — only loaded after scrolling).`;
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".combo")) closeList();
+    });
+
+    // --- Long native select ----------------------------------------------------
+    const citySelect = document.getElementById("city-select");
+    const cityStatus = document.getElementById("city-status");
+    COUNTRIES.forEach((c, i) => {
+      const opt = document.createElement("option");
+      opt.value = `city-${i}`;
+      opt.textContent = `${c} — Central City`;
+      citySelect.appendChild(opt);
+    });
+    citySelect.addEventListener("change", () => {
+      cityStatus.textContent = `Selected: ${citySelect.options[citySelect.selectedIndex].textContent}`;
+    });
+  </script>
+</body>
+</html>

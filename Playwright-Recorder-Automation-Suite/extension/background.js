@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS = {
   selectorPriority: ['testid', 'id', 'role', 'css', 'xpath'],
   captureScreenshots: false,
   captureHovers: false,
+  captureScrolls: true,
   ignoreDomains: [],
   bridgeHost: '127.0.0.1',
   bridgePort: 8765,
@@ -103,7 +104,7 @@ async function injectRecorder(tabId) {
   try {
     await chrome.scripting.executeScript({
       target: { tabId },
-      files: ['selector-engine.js', 'content.js'],
+      files: ['selector-engine.js', 'content.js', 'recorder-panel.js'],
     });
     const settings = await getSettings();
     await chrome.tabs
@@ -112,6 +113,7 @@ async function injectRecorder(tabId) {
         settings: {
           captureScreenshots: settings.captureScreenshots,
           captureHovers: settings.captureHovers,
+          captureScrolls: settings.captureScrolls,
         },
       })
       .catch(() => {});
@@ -124,8 +126,7 @@ async function injectRecorder(tabId) {
 // Recording lifecycle
 // ---------------------------------------------------------------------------
 async function startRecording(tabId) {
-  const tab = await chrome.tabs.get(tabId);
-  session = {
+  const tab = await chrome.tabs.get(tabId);  session = {
     status: 'recording',
     sessionId: uuid(),
     tabId,
@@ -445,10 +446,49 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         sendResponse({ session, bridgeStatus, settings });
         break;
       }
-      case 'start-recording':
-        await startRecording(message.tabId);
+      case 'start-recording': {
+        // The popup passes an explicit tabId; the in-page slide panel omits
+        // it, meaning "record the tab I live in".
+        const tabId = message.tabId ?? (sender.tab && sender.tab.id);
+        if (!tabId) {
+          sendResponse({ ok: false, error: 'no tab to record' });
+          break;
+        }
+        await startRecording(tabId);
         sendResponse({ ok: true });
         break;
+      }
+      case 'show-panel': {
+        // Inject (if needed) and reveal the draggable slide panel in a tab.
+        const panelTabId = message.tabId ?? (sender.tab && sender.tab.id);
+        if (!panelTabId) {
+          sendResponse({ ok: false, error: 'no target tab' });
+          break;
+        }
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: panelTabId },
+            files: ['selector-engine.js', 'content.js', 'recorder-panel.js'],
+          });
+          await chrome.tabs.sendMessage(panelTabId, { type: 'panel-open' }).catch(() => {});
+          sendResponse({ ok: true });
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e && e.message ? e.message : e) });
+        }
+        break;
+      }
+      case 'download-export': {
+        // chrome.downloads is not available to content scripts; the slide
+        // panel asks the worker to perform the download instead.
+        try {
+          const result = await exportSession(message.format);
+          await chrome.downloads.download({ url: result.dataUrl, filename: result.filename, saveAs: false });
+          sendResponse({ ok: true });
+        } catch (e) {
+          sendResponse({ ok: false, error: String(e && e.message ? e.message : e) });
+        }
+        break;
+      }
       case 'pause-recording':
         await pauseRecording();
         sendResponse({ ok: true });
@@ -475,7 +515,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           await chrome.tabs
             .sendMessage(session.tabId, {
               type: 'recorder-update-settings',
-              settings: { captureScreenshots: updated.captureScreenshots, captureHovers: updated.captureHovers },
+              settings: {
+                captureScreenshots: updated.captureScreenshots,
+                captureHovers: updated.captureHovers,
+                captureScrolls: updated.captureScrolls,
+              },
             })
             .catch(() => {});
         }

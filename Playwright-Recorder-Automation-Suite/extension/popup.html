@@ -37,6 +37,12 @@
           <span id="stateBadge" class="badge idle">idle</span>
         </div>
 
+        <button id="btnShowPanel" class="btn btn-secondary full">⇱ Open slide panel in tab</button>
+        <p class="muted small panel-hint">
+          The slide panel floats over the page, stays visible while you record, and can be
+          dragged anywhere by its header — handy for scrollable dropdowns.
+        </p>
+
         <div class="card steps-card">
           <div class="card-title-row">
             <span class="card-title">Recorded steps</span>
@@ -74,6 +80,10 @@
           <label class="switch-row">
             <input type="checkbox" id="cfgHovers" />
             <span>Capture hover events (may be noisy)</span>
+          </label>
+          <label class="switch-row">
+            <input type="checkbox" id="cfgScrolls" checked />
+            <span>Capture scroll events (needed for dropdowns that load options on scroll)</span>
           </label>
         </div>
 

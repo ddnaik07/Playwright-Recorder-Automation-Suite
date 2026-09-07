@@ -68,6 +68,19 @@
         return `${locatorFor(step)}.press(${pyStr(step.value)})`;
       case 'hover':
         return `${locatorFor(step)}.hover()`;
+      case 'scroll': {
+        // Scroll inside a container (e.g. a dropdown listbox that only
+        // populates its options while scrolling): hover the container and
+        // send the recorded wheel delta so lazy options render before the
+        // following click.
+        const meta = step.meta || {};
+        const amount = Number.isFinite(meta.deltaY) && meta.deltaY !== 0
+          ? Math.round(meta.deltaY)
+          : Math.round(Number(step.value) || 0) || null;
+        const lines = [`${locatorFor(step)}.hover()`];
+        if (amount) lines.push(`page.mouse.wheel(0, ${amount})`);
+        return lines.join('\n        ');
+      }
       case 'upload':
         return `${locatorFor(step)}.set_input_files(${pyStr(step.value)})  # adjust path(s)`;
       case 'wait':
@@ -81,6 +94,16 @@
       default:
         return `# TODO: unsupported action '${step.action}'`;
     }
+  }
+
+  /** Optional comment lines attached below a step (e.g. fallback selectors). */
+  function trailerFor(step) {
+    const lines = [];
+    const meta = step.meta || {};
+    if (meta.fallbackCss) {
+      lines.push(`# fallback: page.locator(${pyStr(meta.fallbackCss)})`);
+    }
+    return lines.length ? lines.join('\n        ') : null;
   }
 
   function generatePlaywrightScript(steps, options = {}) {
@@ -104,6 +127,8 @@
     for (const step of steps) {
       lines.push(`        # step ${step.id} @ ${new Date(step.timestamp).toISOString()} (${step.selectorType || 'n/a'})`);
       lines.push('        ' + lineFor(step));
+      const trailer = trailerFor(step);
+      if (trailer) lines.push('        ' + trailer);
       lines.push('        page.wait_for_timeout(150)');
       lines.push('');
     }

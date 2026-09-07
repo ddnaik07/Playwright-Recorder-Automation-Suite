@@ -4,9 +4,12 @@ A two-part toolkit for recording browser interactions and replaying them as
 real, resilient Playwright automations.
 
 - **Part A — `extension/`** — a Manifest V3 Chrome extension that records
-  clicks, typing, dropdowns, checkboxes, key presses, navigation, hovers,
-  drag-and-drop, and file-input interactions on any chosen open tab, and
-  exports them as JSON and/or a generated Playwright Python script.
+  clicks, typing, dropdowns (including scrollable/lazy-loading custom
+  dropdowns), checkboxes, key presses, navigation, hovers, in-container
+  scrolls, drag-and-drop, and file-input interactions on any chosen open tab,
+  and exports them as JSON and/or a generated Playwright Python script. While
+  recording, a **draggable slide panel** floats over the page with live
+  controls and the growing step list.
 - **Part B — `desktop-app/`** — a PySide6 desktop application that hosts the
   Playwright engine: import recordings (via file or a live local WebSocket
   bridge), edit steps, run them against a real browser with live logging,
